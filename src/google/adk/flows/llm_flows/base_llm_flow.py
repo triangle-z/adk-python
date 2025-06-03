@@ -38,6 +38,7 @@ from ...events.event import Event
 from ...models.base_llm_connection import BaseLlmConnection
 from ...models.llm_request import LlmRequest
 from ...models.llm_response import LlmResponse
+from ...models.registry import LLMRegistry
 from ...telemetry import trace_call_llm
 from ...telemetry import trace_send_data
 from ...telemetry import tracer
@@ -78,7 +79,7 @@ class BaseLlmFlow(ABC):
     if invocation_context.end_invocation:
       return
 
-    llm = self.__get_llm(invocation_context)
+    llm = self.__get_llm(llm_request, invocation_context)
     logger.debug(
         'Establishing live connection for agent: %s with llm request: %s',
         invocation_context.agent.name,
@@ -513,7 +514,7 @@ class BaseLlmFlow(ABC):
       )
 
     # Calls the LLM.
-    llm = self.__get_llm(invocation_context)
+    llm = self.__get_llm(llm_request, invocation_context)
     with tracer.start_as_current_span('call_llm'):
       if invocation_context.run_config.support_cfc:
         invocation_context.live_request_queue = LiveRequestQueue()
@@ -634,7 +635,10 @@ class BaseLlmFlow(ABC):
 
     return model_response_event
 
-  def __get_llm(self, invocation_context: InvocationContext) -> BaseLlm:
+  def __get_llm(self, llm_request: LlmRequest, invocation_context: InvocationContext) -> BaseLlm:
+    if llm_request.model:
+      return LLMRegistry.new_llm(llm_request.model)
+
     from ...agents.llm_agent import LlmAgent
 
     return cast(LlmAgent, invocation_context.agent).canonical_model
